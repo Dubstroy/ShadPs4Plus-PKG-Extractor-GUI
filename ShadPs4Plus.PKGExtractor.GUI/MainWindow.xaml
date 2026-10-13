@@ -1,0 +1,273 @@
+﻿<Window x:Class="ShadPs4Plus.PKGExtractor.GUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ShadPs4Plus PKG Extractor 1.1"
+        Height="760"
+        Width="1180"
+        MinHeight="620"
+        MinWidth="950"
+        WindowStartupLocation="CenterScreen"
+        Background="#111318"
+        Foreground="#E8EAF0"
+        Icon="/ShadPs4Plus.PKGExtractor.GUI;component/app.ico">
+    
+
+
+
+    <Window.Resources>
+        <Style x:Key="DarkColumnHeaderStyle"
+           TargetType="{x:Type DataGridColumnHeader}">
+            <Setter Property="Background" Value="#252B36"/>
+            <Setter Property="Foreground" Value="#F3F4F6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="10,0,6,0"/>
+            <Setter Property="BorderBrush" Value="#363D4A"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="DarkCellStyle"
+           TargetType="{x:Type DataGridCell}">
+            <Setter Property="Foreground" Value="#E8EAF0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,0,4,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#344967"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="155"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Encabezado -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,20">
+            <StackPanel>
+                <TextBlock Text="ShadPs4Plus.PKGExtractor"
+                           FontSize="27"
+                           FontWeight="Bold"/>
+                <TextBlock Text="PKG Extractor 1.1"
+                           FontSize="14"
+                           Foreground="#9299AA"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <TextBlock Text="Dubstroy"
+                       Foreground="#72D6A0"
+                       FontWeight="Bold"
+                       FontSize="12"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <!-- Barra de herramientas -->
+        <Border Grid.Row="1"
+        Background="#1B1F27"
+        CornerRadius="8"
+        Padding="12"
+        Margin="0,0,0,14">
+            <StackPanel>
+                <WrapPanel VerticalAlignment="Center">
+                    <Button x:Name="AddFilesButton"
+                    Content="Añadir PKG"
+                    Padding="18,10"
+                    Margin="0,0,8,0"
+                    Click="AddFilesButton_Click"/>
+
+                    <Button x:Name="AddFolderButton"
+                    Content="Añadir carpeta"
+                    Padding="18,10"
+                    Margin="0,0,8,0"
+                    Click="AddFolderButton_Click"/>
+
+                    <Button x:Name="RemoveButton"
+                    Content="Quitar seleccionados"
+                    Padding="18,10"
+                    Margin="0,0,8,0"
+                    Click="RemoveButton_Click"/>
+
+                    <Button x:Name="ClearButton"
+                    Content="Limpiar lista"
+                    Padding="18,10"
+                    Click="ClearButton_Click"/>
+                </WrapPanel>
+
+                <DockPanel Margin="0,12,0,0">
+                    <Button x:Name="ChooseDestinationButton"
+                    Content="Elegir destino"
+                    Padding="18,9"
+                    DockPanel.Dock="Right"
+                    Click="ChooseDestinationButton_Click"/>
+
+                    <TextBlock x:Name="DestinationText"
+                       Text="Destino: no seleccionado"
+                       Foreground="#9299AA"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="0,0,12,0"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Lista de paquetes -->
+        <Border Grid.Row="2"
+                Background="#1B1F27"
+                CornerRadius="8"
+                Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Text="PAQUETES DETECTADOS"
+                           FontWeight="Bold"
+                           Foreground="#9299AA"
+                           Margin="5,5,5,12"/>
+
+
+                <DataGrid x:Name="PackagesGrid"
+          Grid.Row="1"
+          AutoGenerateColumns="False"
+          CanUserAddRows="False"
+          IsReadOnly="True"
+          SelectionMode="Extended"
+          SelectionUnit="FullRow"
+          Background="#171A21"
+          Foreground="#E8EAF0"
+          BorderThickness="0"
+          RowBackground="#20242D"
+          AlternatingRowBackground="#191D24"
+          GridLinesVisibility="Horizontal"
+          HorizontalGridLinesBrush="#303541"
+          HeadersVisibility="Column"
+          ColumnHeaderHeight="36"
+          RowHeight="32"
+          ColumnHeaderStyle="{StaticResource DarkColumnHeaderStyle}"
+          CellStyle="{StaticResource DarkCellStyle}">
+
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Tipo"
+                            Binding="{Binding Type}"
+                            Width="110"/>
+
+                        <DataGridTextColumn Header="Nombre del archivo"
+                            Binding="{Binding FileName}"
+                            Width="200"/>
+
+                        <DataGridTextColumn Header="Nombre del juego"
+                            Binding="{Binding Title}"
+                            Width="*"/>
+
+                        <DataGridTextColumn Header="ID del juego"
+                            Binding="{Binding TitleId}"
+                            Width="120"/>
+
+                        <DataGridTextColumn Header="Versión"
+                            Binding="{Binding AppVersion}"
+                            Width="85"/>
+
+                        <DataGridTextColumn Header="Verificación"
+                            Binding="{Binding VerificationStatus}"
+                            Width="155"/>
+
+                        <DataGridTextColumn Header="Estado"
+                            Binding="{Binding Status}"
+                            Width="110"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+            </Grid>
+        </Border>
+
+        <!-- Progreso -->
+        <StackPanel Grid.Row="3" Margin="0,16,0,12">
+            <DockPanel Margin="0,0,0,8">
+                <TextBlock Text="Progreso de extracción"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="ProgressText"
+                           Text="0%"
+                           DockPanel.Dock="Right"
+                           HorizontalAlignment="Right"/>
+            </DockPanel>
+
+            <ProgressBar x:Name="ExtractionProgress"
+                         Height="10"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0"/>
+        </StackPanel>
+
+        <!-- Registro -->
+        <Border Grid.Row="4"
+                Background="#1B1F27"
+                CornerRadius="8"
+                Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Text="REGISTRO DE ACTIVIDAD"
+                           FontWeight="Bold"
+                           Foreground="#9299AA"
+                           Margin="0,0,0,8"/>
+
+                <ListBox x:Name="LogList"
+                         Grid.Row="1"
+                         Background="#171A21"
+                         Foreground="#D2D7E2"
+                         BorderThickness="0"
+                         FontFamily="Consolas"
+                         FontSize="12"/>
+            </Grid>
+        </Border>
+
+        <!-- Acciones inferiores -->
+        <DockPanel Grid.Row="5" Margin="0,16,0,0">
+            <TextBlock x:Name="PackageCountText"
+                       Text="0 paquetes"
+                       Foreground="#9299AA"
+                       VerticalAlignment="Center"/>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button x:Name="MoveUpButton"
+                        Content="Subir"
+                        Padding="16,10"
+                        Margin="0,0,8,0"
+                        Click="MoveUpButton_Click"/>
+
+                <Button x:Name="MoveDownButton"
+                        Content="Bajar"
+                        Padding="16,10"
+                        Margin="0,0,8,0"
+                        Click="MoveDownButton_Click"/>
+
+                <Button x:Name="StartButton"
+                        Content="Iniciar extracción"
+                        Padding="22,10"
+                        FontWeight="Bold"
+                        Click="StartButton_Click"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>
