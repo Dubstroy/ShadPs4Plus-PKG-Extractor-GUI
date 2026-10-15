@@ -1,16 +1,24 @@
-﻿using System.Collections.ObjectModel;
+﻿using ShadPs4Plus.PKGExtractor.GUI.Updates;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
+using System.Reflection;
 using System.Windows;
 
 namespace ShadPs4Plus.PKGExtractor.GUI;
 
 public partial class MainWindow : Window
 {
+    private readonly UpdateChecker _updateChecker = new();
+    private bool _isCheckingForUpdates;
     private readonly ObservableCollection<PkgItem> _packages = [];
     private string? _destinationPath;
     private bool _isExtracting;
+    private bool _isClosing;
+    private bool _isCancelling;
+    private Process? _activeProcess;
 
     public MainWindow()
     {
@@ -23,6 +31,140 @@ public partial class MainWindow : Window
         AddLog("Clasificación visual por nombre de archivo activada.");
 
         UpdatePackageCount();
+
+        Closing += MainWindow_Closing;
+    }
+
+    private async void UpdateButton_Click(
+    object sender,
+    RoutedEventArgs e)
+    {
+        UpdateButton.IsEnabled = false;
+
+        try
+        {
+            await CheckForUpdatesAsync();
+        }
+        finally
+        {
+            UpdateButton.IsEnabled = true;
+        }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (_isCheckingForUpdates)
+            return;
+
+        _isCheckingForUpdates = true;
+
+        try
+        {
+            AddLog("Comprobando actualizaciones...");
+
+            GitHubReleaseInfo? release =
+                await _updateChecker.CheckForUpdateAsync();
+
+            if (release is null)
+            {
+                AddLog(
+                    "No hay ninguna versión publicada todavía " +
+                    "o GitHub no devolvió una versión válida.");
+
+                System.Windows.MessageBox.Show(
+                    "Todavía no hay una versión publicada para " +
+                    "esta aplicación.\n\n" +
+                    "La comprobación de actualizaciones estará disponible " +
+                    "cuando se publique la primera versión en GitHub Releases.",
+                    "Sin versiones publicadas",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                return;
+            }
+
+            Version installedVersion =
+                Assembly.GetExecutingAssembly().GetName().Version
+                ?? new Version(1, 0, 0);
+
+            int comparison = release.Version.CompareTo(installedVersion);
+
+            if (comparison > 0)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Hay una nueva versión disponible.\n\n" +
+                    $"Versión instalada: {installedVersion}\n" +
+                    $"Nueva versión: {release.Version}\n\n" +
+                    $"{release.Name}",
+                    "Actualización disponible",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                AddLog($"Nueva versión disponible: {release.Version}");
+            }
+            else
+            {
+                System.Windows.MessageBox.Show(
+                    $"Estás utilizando la última versión de " +
+                    $"ShadPs4Plus PKG Extractor GUI.\n\n" +
+                    $"Versión instalada: {installedVersion}",
+                    "Estás actualizado",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                AddLog($"La aplicación está actualizada: {installedVersion}");
+            }
+        }
+
+        catch (InvalidDataException ex)
+        {
+            AddLog($"Respuesta de actualización inválida: {ex.Message}");
+
+            System.Windows.MessageBox.Show(
+                "GitHub devolvió información de actualización inválida.\n\n" +
+                "Inténtalo de nuevo más tarde.",
+                "Respuesta inválida",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        catch (HttpRequestException ex)
+        {
+            AddLog($"Error de conexión al comprobar actualizaciones: {ex.Message}");
+
+            System.Windows.MessageBox.Show(
+                "No se pudo conectar con GitHub para comprobar actualizaciones.\n\n" +
+                "Comprueba tu conexión a Internet e inténtalo de nuevo.",
+                "Error de conexión",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        catch (TaskCanceledException ex)
+        {
+            AddLog($"Tiempo de espera agotado al comprobar actualizaciones: {ex.Message}");
+
+            System.Windows.MessageBox.Show(
+                "La comprobación de actualizaciones tardó demasiado.\n\n" +
+                "Inténtalo de nuevo más tarde.",
+                "Tiempo de espera agotado",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Error inesperado al comprobar actualizaciones: {ex}");
+
+            System.Windows.MessageBox.Show(
+                "Ocurrió un error inesperado al comprobar actualizaciones.\n\n" +
+                ex.Message,
+                "Error de actualización",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
+        finally
+        {
+            _isCheckingForUpdates = false;
+        }
     }
 
     private void AddFilesButton_Click(object sender, RoutedEventArgs e)
@@ -33,10 +175,8 @@ public partial class MainWindow : Window
             Filter = "Paquetes de PlayStation (*.pkg)|*.pkg|Todos los archivos (*.*)|*.*",
             Multiselect = true,
             CheckFileExists = true,
-            InitialDirectory = _packages.Count > 0
-                ? Path.GetDirectoryName(_packages[^1].FilePath)
-                    ?? Environment.GetFolderPath(
-                        Environment.SpecialFolder.DesktopDirectory)
+            InitialDirectory = Directory.Exists(_lastSelectedDirectory)
+                ? _lastSelectedDirectory
                 : Environment.GetFolderPath(
                     Environment.SpecialFolder.DesktopDirectory)
         };
@@ -44,11 +184,16 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
+        SaveLastSelectedDirectory(
+        Path.GetDirectoryName(dialog.FileNames[0])
+        ?? _lastSelectedDirectory);
+
         foreach (string file in dialog.FileNames)
             AddPackage(file);
 
         UpdatePackageCount();
     }
+
 
     private void AddFolderButton_Click(object sender, RoutedEventArgs e)
     {
@@ -102,6 +247,86 @@ public partial class MainWindow : Window
         AddLog($"Carpeta de destino: {_destinationPath}");
     }
 
+    private void Window_DragOver(
+    object sender,
+    System.Windows.DragEventArgs e)
+    {
+        if (_isExtracting || _isClosing)
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+        }
+        else
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+        }
+
+        e.Handled = true;
+    }
+
+    private void Window_Drop(
+    object sender,
+    System.Windows.DragEventArgs e)
+    {
+        if (_isExtracting || _isClosing)
+            return;
+
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+            return;
+
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop)
+            is not string[] files)
+            return;
+
+        int added = 0;
+
+        foreach (string file in files)
+        {
+            if (Directory.Exists(file))
+            {
+                try
+                {
+                    foreach (string pkg in Directory.GetFiles(
+                        file,
+                        "*.pkg",
+                        SearchOption.AllDirectories))
+                    {
+                        int previousCount = _packages.Count;
+                        AddPackage(pkg);
+
+                        if (_packages.Count > previousCount)
+                            added++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddLog($"Error al explorar {file}: {ex.Message}");
+                }
+            }
+            else if (File.Exists(file) &&
+                     string.Equals(
+                         Path.GetExtension(file),
+                         ".pkg",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                int previousCount = _packages.Count;
+                AddPackage(file);
+
+                if (_packages.Count > previousCount)
+                    added++;
+            }
+        }
+
+        UpdatePackageCount();
+        AddLog($"Arrastre completado: {added} PKG nuevos añadidos.");
+    }
+
     private void AddPackage(string file)
     {
         if (_packages.Any(p => string.Equals(
@@ -125,6 +350,67 @@ public partial class MainWindow : Window
 
         AddLog($"Añadido: {fileName} — Tipo: {type}");
     }
+
+
+
+    private static readonly string LastDirectoryConfigPath =
+        Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
+            "ShadPs4Plus.PKGExtractor.GUI",
+            "last-pkg-directory.txt");
+
+    private string _lastSelectedDirectory = LoadLastSelectedDirectory();
+
+    private static string LoadLastSelectedDirectory()
+    {
+        try
+        {
+            if (File.Exists(LastDirectoryConfigPath))
+            {
+                string path = File.ReadAllText(
+                    LastDirectoryConfigPath).Trim();
+
+                if (Directory.Exists(path))
+                    return path;
+            }
+        }
+        catch
+        {
+            // Si no se puede leer la configuración, usar el Escritorio.
+        }
+
+        return Environment.GetFolderPath(
+            Environment.SpecialFolder.DesktopDirectory);
+    }
+
+    private void SaveLastSelectedDirectory(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path))
+                return;
+
+            string? configDirectory =
+                Path.GetDirectoryName(LastDirectoryConfigPath);
+
+            if (configDirectory is null)
+                return;
+
+            Directory.CreateDirectory(configDirectory);
+
+            File.WriteAllText(LastDirectoryConfigPath, path);
+
+            _lastSelectedDirectory = path;
+        }
+        catch (Exception ex)
+        {
+            AddLog(
+                $"No se pudo guardar la última carpeta: {ex.Message}");
+        }
+    }
+
+
 
     private static string DetectPkgType(string fileName)
     {
@@ -246,7 +532,10 @@ public partial class MainWindow : Window
         }
 
         _isExtracting = true;
+        _isCancelling = false;
+
         SetControlsEnabled(false);
+        CancelButton.IsEnabled = true;
 
         int total = _packages.Count;
         bool failed = false;
@@ -260,6 +549,10 @@ public partial class MainWindow : Window
         {
             for (int i = 0; i < total; i++)
             {
+                if (_isClosing)
+                    break;
+
+
                 PkgItem item = _packages[i];
 
                 if (!File.Exists(item.FilePath))
@@ -273,6 +566,8 @@ public partial class MainWindow : Window
                     item.Status = "Extrayendo...";
                     AddLog($"[{i + 1}/{total}] {item.FileName}");
                     AddLog($"Tipo: {item.Type}");
+
+                    Process? process = null;
 
                     try
                     {
@@ -290,24 +585,43 @@ public partial class MainWindow : Window
                         startInfo.ArgumentList.Add(item.FilePath);
                         startInfo.ArgumentList.Add(_destinationPath);
 
-                        using var process = new Process
+                        process = new Process
                         {
                             StartInfo = startInfo
                         };
 
+                        _activeProcess = process;
                         process.Start();
 
-                        Task<string> stdoutTask =
-                            process.StandardOutput.ReadToEndAsync();
 
-                        Task<string> stderrTask =
-                            process.StandardError.ReadToEndAsync();
+
+
+                        Task<string> stdoutTask = ReadExtractorOutputAsync(
+                            process.StandardOutput);
+
+                        Task<string> stderrTask = ReadExtractorOutputAsync(
+                            process.StandardError);
 
                         await process.WaitForExitAsync();
 
+                        await Task.WhenAll(stdoutTask, stderrTask);
+
+                        if (_isClosing)
+                            break;
+
+                        if (_isCancelling)
+                        {
+                            item.Status = "Cancelado";
+                            AddLog($"Extracción cancelada: {item.FileName}");
+                            break;
+                        }
+
                         string stdout = await stdoutTask;
                         string stderr = await stderrTask;
+
                         string output = stdout + Environment.NewLine + stderr;
+
+
 
                         bool validPkg = output.Contains(
                             "is a valid PKG",
@@ -409,6 +723,13 @@ public partial class MainWindow : Window
                         AddLog($"ERROR: {ex.Message}");
                         failed = true;
                     }
+                    finally
+                    {
+                        if (ReferenceEquals(_activeProcess, process))
+                            _activeProcess = null;
+
+                        process?.Dispose();
+                    }
                 }
 
                 ExtractionProgress.Value =
@@ -417,23 +738,178 @@ public partial class MainWindow : Window
                 ProgressText.Text =
                     $"{(i + 1) * 100 / total}% — {i + 1} de {total}";
 
-                if (failed)
+                if (failed || _isCancelling)
                 {
                     for (int j = i + 1; j < total; j++)
                         _packages[j].Status = "No ejecutado";
 
-                    AddLog("Cola detenida debido a un error.");
+                    if (failed)
+                        AddLog("Cola detenida debido a un error.");
+                    else if (_isCancelling)
+                        AddLog("Cola cancelada por el usuario.");
+
                     break;
                 }
             }
 
-            if (!failed)
+            if (!failed && !_isClosing)
                 AddLog("Cola de extracción completada.");
         }
         finally
         {
             _isExtracting = false;
+            _isCancelling = false;
+
             SetControlsEnabled(true);
+            CancelButton.IsEnabled = false;
+        }
+    }
+
+
+    private void ProcessExtractorOutputLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+            return;
+
+        AddLog(line);
+
+        // El motor informa: "Extracting file X of Y to ..."
+        const string marker = "Extracting file ";
+
+        int markerIndex = line.IndexOf(
+            marker,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (markerIndex < 0)
+            return;
+
+        string progressPart = line[(markerIndex + marker.Length)..];
+
+        int ofIndex = progressPart.IndexOf(
+            " of ",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (ofIndex < 0)
+            return;
+
+        string currentText = progressPart[..ofIndex].Trim();
+
+        string remaining = progressPart[(ofIndex + 4)..];
+
+        int toIndex = remaining.IndexOf(
+            " to ",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (toIndex >= 0)
+            remaining = remaining[..toIndex];
+
+        if (!int.TryParse(currentText, out int currentFile) ||
+            !int.TryParse(remaining.Trim(), out int totalFiles) ||
+            totalFiles <= 0)
+        {
+            return;
+        }
+
+        currentFile = Math.Clamp(currentFile, 0, totalFiles);
+
+        double percentage = currentFile * 100.0 / totalFiles;
+
+        Dispatcher.Invoke(() =>
+        {
+            ExtractionProgress.Value = percentage;
+
+            ProgressText.Text =
+                $"{percentage:0.#}% — Archivo {currentFile} de {totalFiles}";
+        });
+    }
+
+
+
+    private async Task<string> ReadExtractorOutputAsync(
+        StreamReader reader)
+    {
+        var output = new System.Text.StringBuilder();
+
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            output.AppendLine(line);
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                ProcessExtractorOutputLine(line);
+            });
+        }
+
+        return output.ToString();
+    }
+
+
+
+    private void MainWindow_Closing(
+    object? sender,
+    CancelEventArgs e)
+    {
+        _isClosing = true;
+
+        Process? process = _activeProcess;
+
+        if (process is null)
+            return;
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // El proceso ya había terminado.
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                $"No se pudo detener el motor de extracción:\n{ex.Message}",
+                "Error al cerrar",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isExtracting || _isCancelling)
+            return;
+
+        _isCancelling = true;
+        ExtractionProgress.Value = 0;
+        ProgressText.Text = "0% — Cancelado...";
+        CancelButton.IsEnabled = false;
+
+        AddLog("Cancelación solicitada por el usuario.");
+
+        Process? process = _activeProcess;
+
+        if (process is null)
+            return;
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                AddLog("Motor de extracción detenido.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // El proceso ya había terminado.
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            AddLog($"ERROR al detener el motor: {ex.Message}");
         }
     }
 
