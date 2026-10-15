@@ -14,6 +14,39 @@ Este proyecto permite utilizar el motor de extracción `pkg_extractor` mediante 
 - Mostrar información de los paquetes obtenida de `param.sfo`, cuando esté disponible.
 - Identificar visualmente el tipo de paquete a partir de su nombre.
 
+## Versiones disponibles
+
+La aplicación se distribuye en dos versiones para adaptarse a diferentes necesidades.
+
+### Light
+
+Paquete ligero que contiene la aplicación principal.
+
+- Requiere tener instalado el **.NET Desktop Runtime** compatible con la versión de la aplicación.
+- No incluye el entorno de ejecución de .NET, por lo que debe instalarse por separado si aún no está disponible en el sistema.
+- Recomendado para usuarios que ya tienen los componentes de ejecución necesarios instalados.
+
+Descarga oficial de Microsoft: [.NET Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+
+En la página de Microsoft, selecciona la versión correspondiente y descarga el **.NET Desktop Runtime para Windows x64**.
+
+### Standalone
+
+Paquete que incluye la aplicación y los componentes de ejecución necesarios para ejecutarla de forma independiente.
+
+- **No requiere instalar .NET Desktop Runtime por separado.**
+- Recomendado para usuarios que desean ejecutar la aplicación sin tener que instalar previamente el entorno de ejecución de .NET.
+- Ocupa más espacio que la versión Light debido a los componentes incluidos.
+
+### ¿Qué versión debería descargar?
+
+| Característica | Light | Standalone |
+|---|---|---|
+| Aplicación principal | Sí | Sí |
+| .NET Desktop Runtime incluido | No | Sí |
+| Requiere instalar .NET por separado | Sí, si no está instalado | No |
+| Tamaño de descarga | Menor | Mayor |
+
 ## Detección del tipo de paquete
 
 La aplicación utiliza el nombre del archivo para identificar visualmente el tipo de paquete:
@@ -28,12 +61,13 @@ Esta clasificación se basa únicamente en el nombre del archivo y no garantiza 
 ## Requisitos
 
 - Windows.
-- Los componentes de ejecución de .NET requeridos por la versión publicada, salvo que se distribuya como aplicación independiente.
-- El motor de extracción `pkg_extractor` y sus bibliotecas necesarias.
+- La versión **Light** requiere el .NET Desktop Runtime compatible con la aplicación.
+- La versión **Standalone** incluye los componentes de ejecución necesarios y no requiere instalarlos por separado.
+- El motor de extracción `pkg_extractor` y sus bibliotecas necesarias, según la distribución utilizada.
 
 ## Instalación y uso
 
-1. Descarga la versión deseada desde la sección [Releases](../../releases) de GitHub.
+1. Descarga la versión deseada desde la sección [Releases](https://github.com/Dubstroy/ShadPs4Plus-PKG-Extractor-GUI/releases) de GitHub.
 2. Extrae los archivos descargados en una carpeta.
 3. Ejecuta `ShadPs4Plus.PKGExtractor.GUI.exe`.
 4. Añade los archivos PKG que deseas procesar o busca paquetes dentro de una carpeta.
@@ -56,7 +90,7 @@ El motor de extracción original funciona mediante línea de comandos. Esta apli
 
 ### Interfaz gráfica
 
-El código de la interfaz gráfica de ShadPs4Plus PKG Extractor GUI se distribuye bajo la licencia MIT. Consulta el archivo [LICENSE](LICENSE) para conocer sus condiciones.
+El código de la interfaz gráfica de ShadPs4Plus PKG Extractor GUI se distribuye bajo la licencia MIT. Consulta el archivo [LICENSE](https://github.com/Dubstroy/ShadPs4Plus-PKG-Extractor-GUI/blob/ShadPs4Plus/LICENSE) para conocer sus condiciones.
 
 ### Motor de extracción
 
